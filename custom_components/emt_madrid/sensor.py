@@ -23,6 +23,8 @@ from .emt_madrid import APIEMT
 
 _LOGGER = logging.getLogger(__name__)
 
+DOMAIN = "emt_madrid"
+
 
 CONF_STOP_ID = "stop"
 CONF_BUS_LINES = "lines"
@@ -143,6 +145,14 @@ def setup_platform(
     """Set up the sensor platform."""
     api_emt = get_api_emt_instance(config)
     stop_id = config.get(CONF_STOP_ID)
+
+    # Store credentials for service use
+    if DOMAIN not in hass.data:
+        hass.data[DOMAIN] = {}
+    hass.data[DOMAIN]["credentials"] = {
+        "email": config.get(CONF_EMAIL),
+        "password": config.get(CONF_PASSWORD),
+    }
     stop_info = api_emt.get_stop_info()
     lines = config.get(CONF_BUS_LINES)
     bus_line_sensors = []

@@ -189,6 +189,33 @@ INVALID_STOP_INFO = {
     "data": [],
 }
 
+VALID_NEARBY_STOPS = {
+    "code": "00",
+    "description": "Data recovered OK",
+    "datetime": "2023-07-02T15:41:44.008245",
+    "data": [
+        {
+            "stop": "72",
+            "stopName": "Cibeles-Casa de América",
+            "distance": 150,
+            "lines": [
+                {"label": "27"},
+                {"label": "5"},
+                {"label": "N26"}
+            ]
+        },
+        {
+            "stop": "73",
+            "stopName": "Recoletos",
+            "distance": 280,
+            "lines": [
+                {"label": "14"},
+                {"label": "27"}
+            ]
+        }
+    ],
+}
+
 
 def make_request_mock(url, headers=None, data=None, method="POST"):
     """Mock the API request."""
@@ -199,7 +226,8 @@ def make_request_mock(url, headers=None, data=None, method="POST"):
             return INVALID_PASSWORD_LOGIN
         return VALID_LOGIN
     if (
-        "stopId" in data
+        data
+        and "stopId" in data
         and url
         == f"https://openapi.emtmadrid.es/v2/transport/busemtmad/stops/{data['stopId']}/arrives/"
     ):
@@ -207,13 +235,17 @@ def make_request_mock(url, headers=None, data=None, method="POST"):
             return INVALID_STOP_ARRIVALS
         return VALID_STOP_AND_LINE_ARRIVALS
     if (
-        "idStop" in data
+        data
+        and "idStop" in data
         and url
         == f"https://openapi.emtmadrid.es/v1/transport/busemtmad/stops/{data['idStop']}/detail/"
     ):
         if data["idStop"] == 123456:
             return INVALID_STOP_INFO
         return VALID_STOP_INFO
+    # Handle nearby stops endpoint
+    if "arroundxy" in url:
+        return VALID_NEARBY_STOPS
     raise ValueError(f"Invalid URL ({url}) or data ({data})")
 
 
@@ -403,3 +435,84 @@ async def test_invalid_stop(
     assert await async_setup_component(hass, "sensor", config)
     await hass.async_block_till_done()
     assert "Bus stop disabled or does not exist" in caplog.text
+
+
+@patch(
+    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+    side_effect=make_request_mock,
+)
+def test_get_stops_from_coordinates(setup_component) -> None:
+    """Test the get_stops_from_coordinates method."""
+    from custom_components.emt_madrid.emt_madrid import APIEMT
+
+    api = APIEMT("test@mail.com", "password123", 0)
+    api.authenticate()
+
+    stops = api.get_stops_from_coordinates(-3.7038, 40.4168, 300)
+
+    assert len(stops) == 2
+    assert stops[0]["stop_id"] == "72"
+    assert stops[0]["stop_name"] == "Cibeles-Casa de América"
+    assert stops[0]["distance"] == 150
+    assert "27" in stops[0]["lines"]
+    assert stops[1]["stop_id"] == "73"
+    assert stops[1]["stop_name"] == "Recoletos"
+
+
+@patch(
+    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+    side_effect=make_request_mock,
+)
+def test_get_nearby_arrivals(setup_component) -> None:
+    """Test the get_nearby_arrivals method."""
+    from custom_components.emt_madrid.emt_madrid import APIEMT
+
+    api = APIEMT("test@mail.com", "password123", 0)
+    api.authenticate()
+
+    arrivals = api.get_nearby_arrivals(-3.7038, 40.4168, 300, 10)
+
+    assert len(arrivals) > 0
+    # Arrivals should be sorted by minutes
+    for i in range(len(arrivals) - 1):
+        assert arrivals[i]["minutes"] <= arrivals[i + 1]["minutes"]
+    # Check arrival structure
+    assert "line" in arrivals[0]
+    assert "minutes" in arrivals[0]
+    assert "stop_name" in arrivals[0]
+
+
+@patch(
+    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+    side_effect=make_request_mock,
+)
+def test_format_arrivals_for_speech(setup_component) -> None:
+    """Test the speech formatting function."""
+    from custom_components.emt_madrid import _format_arrivals_for_speech
+
+    # Test empty arrivals
+    assert _format_arrivals_for_speech([]) == "No hay autobuses llegando a paradas cercanas en este momento."
+
+    # Test single arrival
+    arrivals = [{"line": "27", "minutes": 3}]
+    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos."
+
+    # Test arrival now
+    arrivals = [{"line": "27", "minutes": 0}]
+    assert _format_arrivals_for_speech(arrivals) == "Línea 27 llegando ahora."
+
+    # Test 1 minute
+    arrivals = [{"line": "27", "minutes": 1}]
+    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 1 minuto."
+
+    # Test two arrivals
+    arrivals = [{"line": "27", "minutes": 3}, {"line": "5", "minutes": 7}]
+    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos y Línea 5 en 7 minutos."
+
+    # Test multiple arrivals
+    arrivals = [
+        {"line": "27", "minutes": 3},
+        {"line": "5", "minutes": 7},
+        {"line": "14", "minutes": 12}
+    ]
+    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos, Línea 5 en 7 minutos, y Línea 14 en 12 minutos."

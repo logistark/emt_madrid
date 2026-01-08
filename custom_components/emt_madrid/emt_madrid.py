@@ -11,6 +11,7 @@ ENDPOINT_LOGIN = "v1/mobilitylabs/user/login/"
 ENDPOINT_ARRIVAL_TIME = "v2/transport/busemtmad/stops/"
 ENDPOINT_STOP_INFO = "v1/transport/busemtmad/stops/"
 ENDPOINT_STOPS_ARROUND_STOP = "v2/transport/busemtmad/stops/arroundstop/"
+ENDPOINT_STOPS_FROM_XY = "v1/transport/busemtmad/stops/arroundxy/"
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -215,6 +216,97 @@ class APIEMT:
             raise ValueError("Unable to get the arrival times from the API") from e
         except TypeError as e:
             _LOGGER.error(f"ERROR {e} --> RESPONSE: {response}")
+
+    def get_stops_from_coordinates(self, longitude: float, latitude: float, radius: int = 300) -> list:
+        """Get bus stops within a radius of given coordinates.
+
+        Args:
+            longitude: Longitude coordinate (X)
+            latitude: Latitude coordinate (Y)
+            radius: Search radius in meters (default 300)
+
+        Returns:
+            List of stop dictionaries with stop info and lines
+        """
+        if self._token == "Invalid token":
+            return []
+
+        url = f"{BASE_URL}{ENDPOINT_STOPS_FROM_XY}{longitude}/{latitude}/{radius}/"
+        headers = {"accessToken": self._token}
+
+        try:
+            response = self._make_request(url, headers=headers, method="GET")
+            return self._parse_nearby_stops(response)
+        except Exception as e:
+            _LOGGER.error(f"Error getting stops from coordinates: {e}")
+            return []
+
+    def _parse_nearby_stops(self, response: dict) -> list:
+        """Parse the nearby stops response from the API."""
+        stops = []
+        try:
+            response_code = response.get("code")
+            if response_code in ["00", "01"]:
+                for stop_data in response.get("data", []):
+                    stop_id = stop_data.get("stop") or stop_data.get("stopId")
+                    stops.append({
+                        "stop_id": stop_id,
+                        "stop_name": stop_data.get("stopName") or stop_data.get("name"),
+                        "distance": stop_data.get("distance"),
+                        "lines": [line.get("label") for line in stop_data.get("lines", [])]
+                    })
+            elif response_code == "80":
+                _LOGGER.warning("Invalid token when fetching nearby stops")
+            elif response_code == "90":
+                _LOGGER.warning("No stops found near coordinates")
+        except (KeyError, TypeError) as e:
+            _LOGGER.error(f"Error parsing nearby stops: {e}")
+        return stops
+
+    def get_nearby_arrivals(self, longitude: float, latitude: float, radius: int = 300, max_results: int = 10) -> list:
+        """Get all bus arrivals for stops near given coordinates.
+
+        Args:
+            longitude: Longitude coordinate
+            latitude: Latitude coordinate
+            radius: Search radius in meters
+            max_results: Maximum number of arrivals to return
+
+        Returns:
+            List of arrivals sorted by arrival time
+        """
+        stops = self.get_stops_from_coordinates(longitude, latitude, radius)
+        all_arrivals = []
+
+        for stop in stops:
+            stop_id = stop["stop_id"]
+            url = f"{BASE_URL}{ENDPOINT_ARRIVAL_TIME}{stop_id}/arrives/"
+            headers = {"accessToken": self._token}
+            data = {"stopId": stop_id, "Text_EstimationsRequired_YN": "Y"}
+
+            try:
+                response = self._make_request(url, headers=headers, data=data, method="POST")
+                arrivals = response.get("data", [{}])[0].get("Arrive", [])
+
+                for arrival in arrivals:
+                    estimate = arrival.get("estimateArrive")
+                    if estimate is None:
+                        continue
+                    arrival_minutes = min(math.trunc(estimate / 60), 45)
+                    all_arrivals.append({
+                        "stop_name": stop["stop_name"],
+                        "stop_id": stop_id,
+                        "stop_distance": stop["distance"],
+                        "line": arrival.get("line"),
+                        "destination": arrival.get("destination"),
+                        "minutes": arrival_minutes,
+                        "bus_distance": arrival.get("DistanceBus")
+                    })
+            except Exception as e:
+                _LOGGER.warning(f"Error getting arrivals for stop {stop_id}: {e}")
+
+        all_arrivals.sort(key=lambda x: x["minutes"])
+        return all_arrivals[:max_results]
 
     def _make_request(self, url: str, headers=None, data=None, method="POST"):
         """Send an HTTP request to the specified URL."""
