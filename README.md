@@ -171,6 +171,77 @@ template:
         state: "{{ state_attr('sensor.bus_27_cibeles_casa_de_america', 'next_bus') }}"
 ```
 
+## Nearby Bus Arrivals Service
+
+This integration provides a service `emt_madrid.get_nearby_arrivals` that finds bus stops near your home and returns arrival times. This is useful for voice assistants like Alexa.
+
+### Service Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `latitude` | float | zone.home | Latitude coordinate |
+| `longitude` | float | zone.home | Longitude coordinate |
+| `radius` | int | 300 | Search radius in meters (50-1000) |
+| `max_results` | int | 5 | Maximum arrivals to return (1-20) |
+
+### Service Response
+
+```yaml
+arrivals:
+  - line: "27"
+    minutes: 3
+    stop_name: "Cibeles"
+    destination: "Plaza Castilla"
+speech: "Línea 27 en 3 minutos, Línea 5 en 7 minutos."
+count: 2
+```
+
+### Alexa Voice Integration
+
+You can ask Alexa "when is the next bus" using this setup:
+
+1. **Add to `configuration.yaml`:**
+
+```yaml
+input_boolean:
+  emt_nearby_buses_trigger:
+    name: EMT Buses Trigger
+    icon: mdi:bus
+
+script:
+  emt_nearby_buses:
+    alias: "Nearby EMT Buses"
+    sequence:
+      - action: emt_madrid.get_nearby_arrivals
+        response_variable: bus_data
+      - action: notify.alexa_media_last_called
+        data:
+          message: "{{ bus_data.speech }}"
+          data:
+            type: tts
+
+automation:
+  - alias: "EMT Buses Voice Response"
+    trigger:
+      - platform: state
+        entity_id: input_boolean.emt_nearby_buses_trigger
+        to: "on"
+    action:
+      - action: script.emt_nearby_buses
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.emt_nearby_buses_trigger
+```
+
+2. **Create Alexa Routine:**
+   - Open Alexa app → More → Routines
+   - Trigger: Voice → "buses cercanos" (or your preferred phrase)
+   - Action: Smart Home → Control Device → `EMT Buses Trigger` → Turn On
+
+3. **Say:** "Alexa, buses cercanos"
+
+**Requirements:** [Alexa Media Player](https://github.com/alandtse/alexa_media_player) custom component and Nabu Casa (or Alexa Smart Home skill configured).
+
 ## Roadmap
 
 1. Move to fully async component.
