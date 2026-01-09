@@ -1,9 +1,13 @@
 """EMT Madrid integration."""
 
+from __future__ import annotations
+
 import logging
 
 import voluptuous as vol
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_RADIUS, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
@@ -14,6 +18,8 @@ _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "emt_madrid"
 
+PLATFORMS: list[Platform] = [Platform.SENSOR]
+
 SERVICE_NEARBY_ARRIVALS = "get_nearby_arrivals"
 SERVICE_NEARBY_ARRIVALS_SCHEMA = vol.Schema({
     vol.Optional("latitude"): cv.latitude,
@@ -22,16 +28,69 @@ SERVICE_NEARBY_ARRIVALS_SCHEMA = vol.Schema({
     vol.Optional("max_results", default=5): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
 })
 
-_api_instance: APIEMT | None = None
 
-
-def setup(hass: HomeAssistant, config: ConfigType) -> bool:
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the EMT Madrid component."""
+    hass.data.setdefault(DOMAIN, {})
+    return True
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up EMT Madrid from a config entry."""
+    hass.data.setdefault(DOMAIN, {})
+
+    # Create API instance
+    api = APIEMT(
+        entry.data[CONF_EMAIL],
+        entry.data[CONF_PASSWORD],
+        0  # No fixed stop - dynamic
+    )
+
+    # Authenticate
+    await hass.async_add_executor_job(api.authenticate)
+
+    if api._token == "Invalid token":
+        _LOGGER.error("Failed to authenticate with EMT Madrid API")
+        return False
+
+    # Store API instance and config
+    hass.data[DOMAIN][entry.entry_id] = {
+        "api": api,
+        "config": entry.data,
+    }
+
+    # Store credentials for service use
+    hass.data[DOMAIN]["credentials"] = {
+        "email": entry.data[CONF_EMAIL],
+        "password": entry.data[CONF_PASSWORD],
+    }
+    hass.data[DOMAIN]["radius"] = entry.data.get(CONF_RADIUS, 300)
+
+    # Register service (only once)
+    if not hass.services.has_service(DOMAIN, SERVICE_NEARBY_ARRIVALS):
+        _register_services(hass)
+
+    # Set up platforms
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+
+    if unload_ok:
+        hass.data[DOMAIN].pop(entry.entry_id)
+
+    return unload_ok
+
+
+def _register_services(hass: HomeAssistant) -> None:
+    """Register EMT Madrid services."""
 
     def handle_nearby_arrivals(call: ServiceCall) -> ServiceResponse:
         """Handle the nearby arrivals service call."""
-        global _api_instance
-
         # Get coordinates from call or from zone.home
         latitude = call.data.get("latitude")
         longitude = call.data.get("longitude")
@@ -49,25 +108,24 @@ def setup(hass: HomeAssistant, config: ConfigType) -> bool:
                     "count": 0
                 }
 
-        radius = call.data.get("radius", 300)
+        radius = call.data.get("radius", hass.data[DOMAIN].get("radius", 300))
         max_results = call.data.get("max_results", 5)
 
-        # Get API instance from hass.data (set by sensor platform)
-        if _api_instance is None:
-            if DOMAIN in hass.data and "credentials" in hass.data[DOMAIN]:
-                creds = hass.data[DOMAIN]["credentials"]
-                _api_instance = APIEMT(creds["email"], creds["password"], 0)
-                _api_instance.authenticate()
-            else:
-                return {
-                    "error": "No EMT Madrid credentials configured. Add an emt_madrid sensor first.",
-                    "arrivals": [],
-                    "speech": "No hay credenciales de EMT Madrid configuradas.",
-                    "count": 0
-                }
+        # Get API instance
+        if DOMAIN in hass.data and "credentials" in hass.data[DOMAIN]:
+            creds = hass.data[DOMAIN]["credentials"]
+            api = APIEMT(creds["email"], creds["password"], 0)
+            api.authenticate()
+        else:
+            return {
+                "error": "No EMT Madrid credentials configured.",
+                "arrivals": [],
+                "speech": "No hay credenciales de EMT Madrid configuradas.",
+                "count": 0
+            }
 
         # Get nearby arrivals
-        arrivals = _api_instance.get_nearby_arrivals(longitude, latitude, radius, max_results)
+        arrivals = api.get_nearby_arrivals(longitude, latitude, radius, max_results)
 
         # Format for voice response
         speech_text = _format_arrivals_for_speech(arrivals)
@@ -86,15 +144,12 @@ def setup(hass: HomeAssistant, config: ConfigType) -> bool:
         supports_response=SupportsResponse.ONLY,
     )
 
-    return True
-
 
 def _format_arrivals_for_speech(arrivals: list) -> str:
     """Format arrivals list into a voice-friendly string in Spanish."""
     if not arrivals:
         return "No hay autobuses llegando a paradas cercanas en este momento."
 
-    # Group by line to avoid repetition
     lines_mentioned = set()
     speech_parts = []
 

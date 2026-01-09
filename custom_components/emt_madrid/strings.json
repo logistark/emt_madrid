@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EMT Madrid",
+        "description": "Configure EMT Madrid to get bus arrivals near your location. Register at https://mobilitylabs.emtmadrid.es/ to get your credentials.",
+        "data": {
+          "email": "Email",
+          "password": "Password",
+          "radius": "Search radius (meters)",
+          "latitude": "Latitude (optional)",
+          "longitude": "Longitude (optional)",
+          "stops": "Additional stop IDs (optional)"
+        },
+        "data_description": {
+          "radius": "How far to search for bus stops (50-1000 meters)",
+          "latitude": "Custom latitude. Leave empty to use home location",
+          "longitude": "Custom longitude. Leave empty to use home location",
+          "stops": "Comma-separated list of specific stop IDs, e.g.: 72, 4490"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid email or password",
+      "no_home_zone": "Home zone not configured and no custom coordinates provided",
+      "invalid_stops": "Invalid stop IDs. Use comma-separated numbers",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "EMT Madrid is already configured"
+    }
+  },
+  "services": {
+    "get_nearby_arrivals": {
+      "name": "Get nearby bus arrivals",
+      "description": "Get arrival times for buses at stops near specified coordinates or zone.home",
+      "fields": {
+        "latitude": {
+          "name": "Latitude",
+          "description": "Latitude coordinate (uses zone.home if not provided)"
+        },
+        "longitude": {
+          "name": "Longitude",
+          "description": "Longitude coordinate (uses zone.home if not provided)"
+        },
+        "radius": {
+          "name": "Radius",
+          "description": "Search radius in meters"
+        },
+        "max_results": {
+          "name": "Maximum results",
+          "description": "Maximum number of arrivals to return"
+        }
+      }
+    }
+  }
+}

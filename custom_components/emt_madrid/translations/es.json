@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "EMT Madrid",
+        "description": "Configura EMT Madrid para obtener llegadas de autobuses cerca de tu ubicación. Regístrate en https://mobilitylabs.emtmadrid.es/ para obtener tus credenciales.",
+        "data": {
+          "email": "Email",
+          "password": "Contraseña",
+          "radius": "Radio de búsqueda (metros)",
+          "latitude": "Latitud (opcional)",
+          "longitude": "Longitud (opcional)",
+          "stops": "IDs de paradas adicionales (opcional)"
+        },
+        "data_description": {
+          "radius": "Distancia máxima para buscar paradas (50-1000 metros)",
+          "latitude": "Latitud personalizada. Dejar vacío para usar ubicación de casa",
+          "longitude": "Longitud personalizada. Dejar vacío para usar ubicación de casa",
+          "stops": "Lista de IDs de paradas separadas por comas, ej.: 72, 4490"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Email o contraseña inválidos",
+      "no_home_zone": "Zona de casa no configurada y no se proporcionaron coordenadas",
+      "invalid_stops": "IDs de paradas inválidos. Usa números separados por comas",
+      "unknown": "Error inesperado"
+    },
+    "abort": {
+      "already_configured": "EMT Madrid ya está configurado"
+    }
+  }
+}
