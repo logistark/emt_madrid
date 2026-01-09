@@ -120,7 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Register service (only once)
     if not hass.services.has_service(DOMAIN, SERVICE_NEARBY_ARRIVALS):
-        _register_services(hass)
+        await _async_register_services(hass)
 
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -138,10 +138,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-def _register_services(hass: HomeAssistant) -> None:
+async def _async_register_services(hass: HomeAssistant) -> None:
     """Register EMT Madrid services."""
 
-    def handle_nearby_arrivals(call: ServiceCall) -> ServiceResponse:
+    async def handle_nearby_arrivals(call: ServiceCall) -> ServiceResponse:
         """Handle the nearby arrivals service call."""
         # Get coordinates from call or from zone.home
         latitude = call.data.get("latitude")
@@ -167,7 +167,7 @@ def _register_services(hass: HomeAssistant) -> None:
         if DOMAIN in hass.data and "credentials" in hass.data[DOMAIN]:
             creds = hass.data[DOMAIN]["credentials"]
             api = APIEMT(creds["email"], creds["password"], 0)
-            api.authenticate()
+            await hass.async_add_executor_job(api.authenticate)
         else:
             return {
                 "error": "No EMT Madrid credentials configured.",
@@ -177,7 +177,9 @@ def _register_services(hass: HomeAssistant) -> None:
             }
 
         # Get nearby arrivals
-        arrivals = api.get_nearby_arrivals(longitude, latitude, radius, max_results)
+        arrivals = await hass.async_add_executor_job(
+            api.get_nearby_arrivals, longitude, latitude, radius, max_results
+        )
 
         # Format for voice response
         speech_text = _format_arrivals_for_speech(arrivals)
@@ -188,7 +190,7 @@ def _register_services(hass: HomeAssistant) -> None:
             "count": len(arrivals)
         }
 
-    hass.services.register(
+    hass.services.async_register(
         DOMAIN,
         SERVICE_NEARBY_ARRIVALS,
         handle_nearby_arrivals,
