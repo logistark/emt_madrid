@@ -98,6 +98,9 @@ class EMTNearbyArrivalsSensor(SensorEntity):
         """Return the state - next bus info."""
         if self._arrivals:
             next_bus = self._arrivals[0]
+            stop_name = next_bus.get('stop_name', '')
+            if stop_name:
+                return f"{next_bus['line']} en {next_bus['minutes']} min → {stop_name}"
             return f"{next_bus['line']} en {next_bus['minutes']} min"
         return "Sin buses"
 
@@ -125,14 +128,24 @@ class EMTNearbyArrivalsSensor(SensorEntity):
         for arrival in self._arrivals[:5]:
             line = arrival["line"]
             minutes = arrival["minutes"]
+            stop_name = arrival.get("stop_name", "")
 
             if line not in lines_mentioned:
                 if minutes == 0:
-                    speech_parts.append(f"Línea {line} llegando ahora")
+                    if stop_name:
+                        speech_parts.append(f"Línea {line} llegando ahora en {stop_name}")
+                    else:
+                        speech_parts.append(f"Línea {line} llegando ahora")
                 elif minutes == 1:
-                    speech_parts.append(f"Línea {line} en 1 minuto")
+                    if stop_name:
+                        speech_parts.append(f"Línea {line} en 1 minuto en {stop_name}")
+                    else:
+                        speech_parts.append(f"Línea {line} en 1 minuto")
                 else:
-                    speech_parts.append(f"Línea {line} en {minutes} minutos")
+                    if stop_name:
+                        speech_parts.append(f"Línea {line} en {minutes} minutos en {stop_name}")
+                    else:
+                        speech_parts.append(f"Línea {line} en {minutes} minutos")
                 lines_mentioned.add(line)
 
         if len(speech_parts) == 1:

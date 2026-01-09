@@ -210,14 +210,24 @@ def _format_arrivals_for_speech(arrivals: list) -> str:
     for arrival in arrivals:
         line = arrival["line"]
         minutes = arrival["minutes"]
+        stop_name = arrival.get("stop_name", "")
 
         if line not in lines_mentioned:
             if minutes == 0:
-                speech_parts.append(f"Línea {line} llegando ahora")
+                if stop_name:
+                    speech_parts.append(f"Línea {line} llegando ahora en {stop_name}")
+                else:
+                    speech_parts.append(f"Línea {line} llegando ahora")
             elif minutes == 1:
-                speech_parts.append(f"Línea {line} en 1 minuto")
+                if stop_name:
+                    speech_parts.append(f"Línea {line} en 1 minuto en {stop_name}")
+                else:
+                    speech_parts.append(f"Línea {line} en 1 minuto")
             else:
-                speech_parts.append(f"Línea {line} en {minutes} minutos")
+                if stop_name:
+                    speech_parts.append(f"Línea {line} en {minutes} minutos en {stop_name}")
+                else:
+                    speech_parts.append(f"Línea {line} en {minutes} minutos")
             lines_mentioned.add(line)
 
     if len(speech_parts) == 1:
