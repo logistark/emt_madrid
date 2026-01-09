@@ -6,7 +6,7 @@ import logging
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, SOURCE_IMPORT
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_RADIUS, Platform
 from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
 from homeassistant.helpers import config_validation as cv
@@ -17,8 +17,28 @@ from .emt_madrid import APIEMT
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "emt_madrid"
+CONF_STOP_ID = "stop_id"
+CONF_STOPS = "stops"
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
+
+# Schema for YAML configuration (legacy support)
+CONFIG_SCHEMA = vol.Schema(
+    {
+        DOMAIN: vol.Schema(
+            {
+                vol.Required(CONF_EMAIL): cv.string,
+                vol.Required(CONF_PASSWORD): cv.string,
+                vol.Optional(CONF_STOP_ID): cv.positive_int,
+                vol.Optional(CONF_STOPS): vol.All(cv.ensure_list, [cv.positive_int]),
+                vol.Optional(CONF_RADIUS, default=300): vol.All(
+                    vol.Coerce(int), vol.Range(min=50, max=1000)
+                ),
+            }
+        )
+    },
+    extra=vol.ALLOW_EXTRA,
+)
 
 SERVICE_NEARBY_ARRIVALS = "get_nearby_arrivals"
 SERVICE_NEARBY_ARRIVALS_SCHEMA = vol.Schema({
@@ -32,6 +52,38 @@ SERVICE_NEARBY_ARRIVALS_SCHEMA = vol.Schema({
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up the EMT Madrid component."""
     hass.data.setdefault(DOMAIN, {})
+
+    # Check for YAML configuration and import it
+    if DOMAIN in config:
+        yaml_config = config[DOMAIN]
+
+        # Check if already imported
+        for entry in hass.config_entries.async_entries(DOMAIN):
+            if entry.source == SOURCE_IMPORT:
+                _LOGGER.debug("EMT Madrid already imported from YAML")
+                return True
+
+        _LOGGER.info("Importing EMT Madrid configuration from YAML")
+
+        # Build stops list from old config
+        stops = yaml_config.get(CONF_STOPS, [])
+        if yaml_config.get(CONF_STOP_ID):
+            stops.append(yaml_config[CONF_STOP_ID])
+
+        # Create config entry from YAML
+        hass.async_create_task(
+            hass.config_entries.flow.async_init(
+                DOMAIN,
+                context={"source": SOURCE_IMPORT},
+                data={
+                    CONF_EMAIL: yaml_config[CONF_EMAIL],
+                    CONF_PASSWORD: yaml_config[CONF_PASSWORD],
+                    CONF_RADIUS: yaml_config.get(CONF_RADIUS, 300),
+                    CONF_STOPS: stops,
+                },
+            )
+        )
+
     return True
 
 
@@ -73,15 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up platforms
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Add update listener for options changes
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-
     return True
-
-
-async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Reload config entry when options change."""
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

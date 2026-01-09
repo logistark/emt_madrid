@@ -39,6 +39,13 @@ Register at [EMT MobilityLabs](https://mobilitylabs.emtmadrid.es/) to get your A
 2. Search for **"EMT Madrid"**
 3. Enter your credentials and options:
 
+### Migration from YAML
+
+If you have an existing YAML configuration, it will be automatically imported on restart. After migration:
+1. The integration will appear in **Settings** → **Devices & Services**
+2. You can remove the `emt_madrid:` section from your `configuration.yaml`
+3. Use the UI to manage settings going forward
+
 ### Edit Configuration
 
 To change settings after setup:

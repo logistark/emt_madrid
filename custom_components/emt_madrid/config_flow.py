@@ -65,6 +65,34 @@ class EMTMadridConfigFlow(ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         return EMTMadridOptionsFlow(config_entry)
 
+    async def async_step_import(
+        self, import_data: dict[str, Any]
+    ) -> ConfigFlowResult:
+        """Handle import from YAML configuration."""
+        # Check if already configured
+        await self.async_set_unique_id("emt_madrid_nearby")
+        self._abort_if_unique_id_configured()
+
+        # Validate credentials
+        try:
+            await validate_input(self.hass, import_data)
+        except InvalidAuth:
+            _LOGGER.error("Invalid EMT Madrid credentials in YAML configuration")
+            return self.async_abort(reason="invalid_auth")
+        except NoHomeZone:
+            _LOGGER.error("No home zone configured for EMT Madrid")
+            return self.async_abort(reason="no_home_zone")
+        except Exception:
+            _LOGGER.exception("Error importing EMT Madrid configuration")
+            return self.async_abort(reason="unknown")
+
+        _LOGGER.info("Successfully imported EMT Madrid from YAML. You can now remove the YAML configuration.")
+
+        return self.async_create_entry(
+            title="EMT Madrid",
+            data=import_data,
+        )
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
