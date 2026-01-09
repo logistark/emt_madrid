@@ -248,7 +248,14 @@ class APIEMT:
         try:
             response_code = response.get("code")
             if response_code in ["00", "01"]:
-                for stop_data in response.get("data", []):
+                # API returns stops nested in data[0].stops
+                data = response.get("data", [])
+                if data and isinstance(data, list) and len(data) > 0:
+                    stops_data = data[0].get("stops", []) if isinstance(data[0], dict) else data
+                else:
+                    stops_data = []
+
+                for stop_data in stops_data:
                     # Try multiple possible field names for stop ID
                     stop_id = (
                         stop_data.get("stop") or
@@ -262,11 +269,15 @@ class APIEMT:
                         _LOGGER.debug(f"Skipping stop without ID: {stop_data}")
                         continue
 
+                    # Get lines from dataLine field
+                    lines_data = stop_data.get("lines", []) or stop_data.get("dataLine", [])
+                    lines = [line.get("label") for line in lines_data if line.get("label")]
+
                     stops.append({
                         "stop_id": stop_id,
                         "stop_name": stop_data.get("stopName") or stop_data.get("name") or stop_data.get("label"),
                         "distance": stop_data.get("distance") or stop_data.get("meters"),
-                        "lines": [line.get("label") for line in stop_data.get("lines", [])]
+                        "lines": lines
                     })
             elif response_code == "80":
                 _LOGGER.warning("Invalid token when fetching nearby stops")
