@@ -1,217 +1,76 @@
-"""The tests for the EMT Madrid sensor platform."""
+"""Tests for the EMT Madrid integration."""
 
-
-from unittest.mock import patch
-
+from unittest.mock import patch, MagicMock
 import pytest
 
 from homeassistant.core import HomeAssistant
-from homeassistant.setup import async_setup_component
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE
 
+from custom_components.emt_madrid import DOMAIN, CONF_STOPS
+from custom_components.emt_madrid.config_flow import EMTMadridConfigFlow
+
+
+# Mock API responses
 VALID_LOGIN = {
     "code": "01",
-    "description": "Token 3bd5855a-ed3d-41d5-8b4b-182726f86031 extend into control-cache Data recovered OK, (lapsed: 468 millsecs)",
+    "description": "Token extended OK",
     "datetime": "2023-06-29T19:50:08.307475",
     "data": [
         {
-            "nameApp": "OPENAPI MobilityLabs",
-            "levelApp": 0,
-            "updatedAt": "2022-11-26T21:05:55.5600000",
-            "userName": "yourusername",
-            "lastUpdate": {"$date": 1688057414194},
-            "idUser": "2f104b08-f8bf-4199-a4bc-c6ecc42ad6ba",
-            "priv": "U",
-            "tokenSecExpiration": 86399,
-            "email": "yourmail@mail.com",
-            "tokenDteExpiration": {"$date": 1688151013194},
-            "flagAdvise": True,
             "accessToken": "3bd5855a-ed3d-41d5-8b4b-182726f86031",
-            "apiCounter": {
-                "current": 96,
-                "dailyUse": 20000,
-                "owner": 0,
-                "licenceUse": "Please mention EMT Madrid MobilityLabs as data source. Thank you and enjoy!",
-                "aboutUses": "If you need to extend the daily use of this API, please, register your App in Mobilitylabs and use your own X-ClientId and passKey instead of generic login (more info in https://mobilitylabs.emtmadrid.es/doc/new-app and https://apidocs.emtmadrid.es/#api-Block_1_User_identity-login)",
-            },
-            "username": "yourusername",
+            "email": "test@mail.com",
         }
     ],
 }
 
-INVALID_USER_LOGIN = {
+INVALID_LOGIN = {
     "code": "92",
-    "description": "Error: User not found (lapsed: 776 millsecs)",
+    "description": "Error: User not found",
     "datetime": "2023-06-29T20:01:09.441986",
-    "data": [],
-}
-
-INVALID_PASSWORD_LOGIN = {
-    "code": "89",
-    "description": "Error: Invalid user or Password (lapsed: 415 millsecs)",
-    "datetime": "2023-06-29T20:02:41.901955",
-    "data": [],
-}
-
-VALID_STOP_AND_LINE_ARRIVALS = {
-    "code": "00",
-    "description": "Data recovered OK (lapsed: 1155 millsecs)",
-    "datetime": "2023-06-29T18:50:13.968932",
-    "data": [
-        {
-            "Arrive": [
-                {
-                    "line": "27",
-                    "stop": "72",
-                    "isHead": "False",
-                    "destination": "PLAZA CASTILLA",
-                    "deviation": 0,
-                    "bus": 528,
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [-3.69295437941713, 40.41338567959594],
-                    },
-                    "estimateArrive": 233,
-                    "DistanceBus": 674,
-                    "positionTypeBus": "0",
-                },
-                {
-                    "line": "5",
-                    "stop": "72",
-                    "isHead": "False",
-                    "destination": "CHAMARTIN",
-                    "deviation": 0,
-                    "bus": 51,
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [-3.6950488592789854, 40.40415447211867],
-                    },
-                    "estimateArrive": 345,
-                    "DistanceBus": 1777,
-                    "positionTypeBus": "0",
-                },
-                {
-                    "line": "27",
-                    "stop": "72",
-                    "isHead": "False",
-                    "destination": "PLAZA CASTILLA",
-                    "deviation": 0,
-                    "bus": 515,
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [-3.6950488592789865, 40.40415447211869],
-                    },
-                    "estimateArrive": 1556,
-                    "DistanceBus": 1777,
-                    "positionTypeBus": "0",
-                },
-            ],
-            "StopInfo": [],
-            "ExtraInfo": [],
-            "Incident": {},
-        }
-    ],
-}
-
-INVALID_STOP_ARRIVALS = {
-    "code": "80",
-    "description": [
-        {"ES": "Parada no disponible actualmente o inexistente"},
-        {"EN": "Bus Stop disabled or not exists"},
-    ],
-    "datetime": "2023-06-29T21:34:48.886037",
-    "data": [{"Arrive": [], "StopInfo": [], "ExtraInfo": [], "Incident": {}}],
-}
-
-VALID_STOP_INFO = {
-    "code": "00",
-    "description": "Data recovered  OK, (lapsed: 463 millsecs)",
-    "datetime": "2023-07-02T15:41:44.008245",
-    "data": [
-        {
-            "stops": [
-                {
-                    "stop": "72",
-                    "name": "Cibeles-Casa de América",
-                    "postalAddress": "Pº de Recoletos, 2 (Pza. de Cibeles)",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [-3.69214452424823, 40.4203613685499],
-                    },
-                    "pmv": "60996",
-                    "dataLine": [
-                        {
-                            "line": "005",
-                            "label": "5",
-                            "direction": "B",
-                            "maxFreq": "33",
-                            "minFreq": "16",
-                            "headerA": "SOL/SEVILLA",
-                            "headerB": "CHAMARTIN",
-                            "startTime": "07:00",
-                            "stopTime": "22:58",
-                            "dayType": "FE",
-                        },
-                        {
-                            "line": "027",
-                            "label": "27",
-                            "direction": "B",
-                            "maxFreq": "25",
-                            "minFreq": "11",
-                            "headerA": "EMBAJADORES",
-                            "headerB": "PLAZA CASTILLA",
-                            "startTime": "07:00",
-                            "stopTime": "00:01",
-                            "dayType": "FE",
-                        },
-                        {
-                            "line": "526",
-                            "label": "N26",
-                            "direction": "A",
-                            "maxFreq": "60",
-                            "minFreq": "20",
-                            "headerA": "ALONSO MARTINEZ",
-                            "headerB": "ALUCHE",
-                            "startTime": "00:00",
-                            "stopTime": "05:10",
-                            "dayType": "FE",
-                        },
-                    ],
-                }
-            ]
-        }
-    ],
-}
-
-INVALID_STOP_INFO = {
-    "code": "90",
-    "description": "Error managing internal services",
-    "datetime": "2023-07-02T15:42:55.210432",
     "data": [],
 }
 
 VALID_NEARBY_STOPS = {
     "code": "00",
     "description": "Data recovered OK",
-    "datetime": "2023-07-02T15:41:44.008245",
     "data": [
         {
             "stop": "72",
             "stopName": "Cibeles-Casa de América",
             "distance": 150,
-            "lines": [
-                {"label": "27"},
-                {"label": "5"},
-                {"label": "N26"}
-            ]
+            "lines": [{"label": "27"}, {"label": "5"}]
         },
         {
             "stop": "73",
             "stopName": "Recoletos",
             "distance": 280,
-            "lines": [
-                {"label": "14"},
-                {"label": "27"}
-            ]
+            "lines": [{"label": "14"}]
+        }
+    ],
+}
+
+VALID_ARRIVALS = {
+    "code": "00",
+    "description": "Data recovered OK",
+    "data": [
+        {
+            "Arrive": [
+                {
+                    "line": "27",
+                    "stop": "72",
+                    "destination": "PLAZA CASTILLA",
+                    "estimateArrive": 180,
+                    "DistanceBus": 674,
+                },
+                {
+                    "line": "5",
+                    "stop": "72",
+                    "destination": "CHAMARTIN",
+                    "estimateArrive": 420,
+                    "DistanceBus": 1200,
+                },
+            ],
         }
     ],
 }
@@ -219,300 +78,299 @@ VALID_NEARBY_STOPS = {
 
 def make_request_mock(url, headers=None, data=None, method="POST"):
     """Mock the API request."""
-    if url == "https://openapi.emtmadrid.es/v1/mobilitylabs/user/login/":
-        if headers["email"] == "invalid@email.com":
-            return INVALID_USER_LOGIN
-        if headers["password"] == "invalid_password":
-            return INVALID_PASSWORD_LOGIN
+    if "login" in url:
+        if headers and headers.get("email") == "invalid@email.com":
+            return INVALID_LOGIN
         return VALID_LOGIN
-    if (
-        data
-        and "stopId" in data
-        and url
-        == f"https://openapi.emtmadrid.es/v2/transport/busemtmad/stops/{data['stopId']}/arrives/"
-    ):
-        if data["stopId"] == 123456:
-            return INVALID_STOP_ARRIVALS
-        return VALID_STOP_AND_LINE_ARRIVALS
-    if (
-        data
-        and "idStop" in data
-        and url
-        == f"https://openapi.emtmadrid.es/v1/transport/busemtmad/stops/{data['idStop']}/detail/"
-    ):
-        if data["idStop"] == 123456:
-            return INVALID_STOP_INFO
-        return VALID_STOP_INFO
-    # Handle nearby stops endpoint
     if "arroundxy" in url:
         return VALID_NEARBY_STOPS
-    raise ValueError(f"Invalid URL ({url}) or data ({data})")
+    if "arrives" in url:
+        return VALID_ARRIVALS
+    return {"code": "00", "data": []}
 
 
-@patch(
-    "homeassistant.components.emt_madrid.sensor.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-async def test_valid_config(setup_component, hass: HomeAssistant) -> None:
-    """Test the configuration of the emt_madrid component with valid settings."""
+class TestConfigFlow:
+    """Test the config flow."""
 
-    config = {
-        "sensor": {
-            "platform": "emt_madrid",
-            "email": "test@mail.com",
-            "password": "password123",
-            "stop": 72,
-            "lines": ["27"],
-            "icon": "mdi:fountain",
-        }
-    }
-    assert await async_setup_component(hass, "sensor", config)
-    await hass.async_block_till_done()
-    state = hass.states.get("sensor.bus_27_cibeles_casa_de_america")
+    def _init_flow(self, hass):
+        """Initialize a config flow with proper context."""
+        flow = EMTMadridConfigFlow()
+        flow.hass = hass
+        flow.context = {}
+        flow._async_current_entries = lambda: []
+        flow._abort_if_unique_id_configured = lambda: None
+        return flow
 
-    assert state.state == "3"
-    assert state.attributes["next_bus"] == 25
-    assert state.attributes["stop_id"] == 72
-    assert state.attributes["line"] == "27"
-    assert state.attributes["attribution"] == "Data provided by EMT Madrid MobilityLabs"
-    assert state.attributes["unit_of_measurement"] == "min"
-    assert state.attributes["icon"] == "mdi:fountain"
-    assert state.attributes["distance"] == 674
-    assert state.attributes["destination"] == "PLAZA CASTILLA"
-    assert state.attributes["origin"] == "EMBAJADORES"
-    assert state.attributes["start_time"] == "07:00"
-    assert state.attributes["end_time"] == "00:01"
-    assert state.attributes["max_frequency"] == 25
-    assert state.attributes["min_frequency"] == 11
-    assert state.attributes["stop_name"] == "Cibeles-Casa de América"
-    assert state.attributes["stop_address"] == "Pº de Recoletos, 2 (Pza. de Cibeles)"
+    @patch(
+        "custom_components.emt_madrid.config_flow.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    async def test_user_flow_success(self, mock_request, hass: HomeAssistant) -> None:
+        """Test successful user config flow."""
+        # Set up zone.home
+        hass.states.async_set(
+            "zone.home",
+            "zoning",
+            {"latitude": 40.4168, "longitude": -3.7038}
+        )
 
+        flow = self._init_flow(hass)
 
-@patch(
-    "homeassistant.components.emt_madrid.sensor.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-async def test_valid_config_no_lines_specified(
-    setup_component, hass: HomeAssistant
-) -> None:
-    """Test the basic configuration of the emt_madrid component with valid settings."""
+        result = await flow.async_step_user(
+            user_input={
+                CONF_EMAIL: "test@mail.com",
+                CONF_PASSWORD: "password123",
+                CONF_RADIUS: 300,
+                CONF_STOPS: "",
+            }
+        )
 
-    config = {
-        "sensor": {
-            "platform": "emt_madrid",
-            "email": "test@mail.com",
-            "password": "password123",
-            "stop": 72,
-        }
-    }
-    assert await async_setup_component(hass, "sensor", config)
-    await hass.async_block_till_done()
-    state = hass.states.get("sensor.bus_27_cibeles_casa_de_america")
+        assert result["type"].value == "create_entry"
+        assert result["title"] == "EMT Madrid"
+        assert result["data"][CONF_EMAIL] == "test@mail.com"
+        assert result["data"][CONF_RADIUS] == 300
 
-    assert state.state == "3"
-    assert state.attributes["next_bus"] == 25
-    assert state.attributes["stop_id"] == 72
-    assert state.attributes["line"] == "27"
-    assert state.attributes["attribution"] == "Data provided by EMT Madrid MobilityLabs"
-    assert state.attributes["unit_of_measurement"] == "min"
-    assert state.attributes["icon"] == "mdi:bus"
-    assert state.attributes["distance"] == 674
-    assert state.attributes["destination"] == "PLAZA CASTILLA"
-    assert state.attributes["origin"] == "EMBAJADORES"
-    assert state.attributes["start_time"] == "07:00"
-    assert state.attributes["end_time"] == "00:01"
-    assert state.attributes["max_frequency"] == 25
-    assert state.attributes["min_frequency"] == 11
-    assert state.attributes["stop_name"] == "Cibeles-Casa de América"
-    assert state.attributes["stop_address"] == "Pº de Recoletos, 2 (Pza. de Cibeles)"
+    @patch(
+        "custom_components.emt_madrid.config_flow.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    async def test_user_flow_invalid_auth(self, mock_request, hass: HomeAssistant) -> None:
+        """Test config flow with invalid credentials."""
+        hass.states.async_set(
+            "zone.home",
+            "zoning",
+            {"latitude": 40.4168, "longitude": -3.7038}
+        )
 
-    state = hass.states.get("sensor.bus_5_cibeles_casa_de_america")
+        flow = self._init_flow(hass)
 
-    assert state.state == "5"
-    assert state.attributes["next_bus"] is None
-    assert state.attributes["stop_id"] == 72
-    assert state.attributes["line"] == "5"
-    assert state.attributes["attribution"] == "Data provided by EMT Madrid MobilityLabs"
-    assert state.attributes["unit_of_measurement"] == "min"
-    assert state.attributes["icon"] == "mdi:bus"
-    assert state.attributes["distance"] == 1777
-    assert state.attributes["destination"] == "CHAMARTIN"
-    assert state.attributes["origin"] == "SOL/SEVILLA"
-    assert state.attributes["start_time"] == "07:00"
-    assert state.attributes["end_time"] == "22:58"
-    assert state.attributes["max_frequency"] == 33
-    assert state.attributes["min_frequency"] == 16
-    assert state.attributes["stop_name"] == "Cibeles-Casa de América"
-    assert state.attributes["stop_address"] == "Pº de Recoletos, 2 (Pza. de Cibeles)"
+        result = await flow.async_step_user(
+            user_input={
+                CONF_EMAIL: "invalid@email.com",
+                CONF_PASSWORD: "password123",
+                CONF_RADIUS: 300,
+                CONF_STOPS: "",
+            }
+        )
 
-    state = hass.states.get("sensor.bus_n26_cibeles_casa_de_america")
+        assert result["type"].value == "form"
+        assert result["errors"]["base"] == "invalid_auth"
 
-    assert state.state == "unknown"
-    assert state.attributes["next_bus"] is None
-    assert state.attributes["stop_id"] == 72
-    assert state.attributes["line"] == "N26"
-    assert state.attributes["attribution"] == "Data provided by EMT Madrid MobilityLabs"
-    assert state.attributes["unit_of_measurement"] == "min"
-    assert state.attributes["icon"] == "mdi:bus"
-    assert state.attributes["distance"] is None
-    assert state.attributes["destination"] == "ALONSO MARTINEZ"
-    assert state.attributes["origin"] == "ALUCHE"
-    assert state.attributes["start_time"] == "00:00"
-    assert state.attributes["end_time"] == "05:10"
-    assert state.attributes["max_frequency"] == 60
-    assert state.attributes["min_frequency"] == 20
-    assert state.attributes["stop_name"] == "Cibeles-Casa de América"
-    assert state.attributes["stop_address"] == "Pº de Recoletos, 2 (Pza. de Cibeles)"
+    @patch(
+        "custom_components.emt_madrid.config_flow.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    async def test_user_flow_no_home_zone(self, mock_request, hass: HomeAssistant) -> None:
+        """Test config flow without zone.home and no custom coordinates."""
+        flow = self._init_flow(hass)
 
+        result = await flow.async_step_user(
+            user_input={
+                CONF_EMAIL: "test@mail.com",
+                CONF_PASSWORD: "password123",
+                CONF_RADIUS: 300,
+                CONF_STOPS: "",
+            }
+        )
 
-@patch(
-    "homeassistant.components.emt_madrid.sensor.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-async def test_invalid_user(
-    setup_component, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Test the configuration of the emt_madrid component with an invalid user."""
+        assert result["type"].value == "form"
+        assert result["errors"]["base"] == "no_home_zone"
 
-    config = {
-        "sensor": {
-            "platform": "emt_madrid",
-            "email": "invalid@email.com",
-            "password": "password123",
-            "stop": 72,
-            "lines": ["27"],
-            "icon": "mdi:fountain",
-        }
-    }
-    assert await async_setup_component(hass, "sensor", config)
-    await hass.async_block_till_done()
-    assert "Invalid email or password" in caplog.text
+    @patch(
+        "custom_components.emt_madrid.config_flow.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    async def test_user_flow_with_custom_coordinates(self, mock_request, hass: HomeAssistant) -> None:
+        """Test config flow with custom coordinates (no zone.home needed)."""
+        flow = self._init_flow(hass)
+
+        result = await flow.async_step_user(
+            user_input={
+                CONF_EMAIL: "test@mail.com",
+                CONF_PASSWORD: "password123",
+                CONF_RADIUS: 500,
+                CONF_LATITUDE: 40.4168,
+                CONF_LONGITUDE: -3.7038,
+                CONF_STOPS: "72, 73",
+            }
+        )
+
+        assert result["type"].value == "create_entry"
+        assert result["data"][CONF_LATITUDE] == 40.4168
+        assert result["data"][CONF_LONGITUDE] == -3.7038
+        assert result["data"][CONF_STOPS] == [72, 73]
+
+    async def test_user_flow_invalid_stops(self, hass: HomeAssistant) -> None:
+        """Test config flow with invalid stop IDs."""
+        hass.states.async_set(
+            "zone.home",
+            "zoning",
+            {"latitude": 40.4168, "longitude": -3.7038}
+        )
+
+        flow = self._init_flow(hass)
+
+        result = await flow.async_step_user(
+            user_input={
+                CONF_EMAIL: "test@mail.com",
+                CONF_PASSWORD: "password123",
+                CONF_RADIUS: 300,
+                CONF_STOPS: "abc, 123",
+            }
+        )
+
+        assert result["type"].value == "form"
+        assert result["errors"]["base"] == "invalid_stops"
 
 
-@patch(
-    "homeassistant.components.emt_madrid.sensor.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-async def test_invalid_password(
-    setup_component, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Test the configuration of the emt_madrid component with an invalid password."""
+class TestAPIEMT:
+    """Test the APIEMT class."""
 
-    config = {
-        "sensor": {
-            "platform": "emt_madrid",
-            "email": "test@email.com",
-            "password": "invalid_password",
-            "stop": 72,
-            "lines": ["27"],
-            "icon": "mdi:fountain",
-        }
-    }
-    assert await async_setup_component(hass, "sensor", config)
-    await hass.async_block_till_done()
-    assert "Invalid email or password" in caplog.text
+    @patch(
+        "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    def test_authenticate_success(self, mock_request) -> None:
+        """Test successful authentication."""
+        from custom_components.emt_madrid.emt_madrid import APIEMT
 
+        api = APIEMT("test@mail.com", "password123", 0)
+        api.authenticate()
 
-@patch(
-    "homeassistant.components.emt_madrid.sensor.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-async def test_invalid_stop(
-    setup_component, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Test the configuration of the emt_madrid component with an invalid bus stop."""
+        assert api._token == "3bd5855a-ed3d-41d5-8b4b-182726f86031"
 
-    config = {
-        "sensor": {
-            "platform": "emt_madrid",
-            "email": "test@email.com",
-            "password": "password123",
-            "stop": 123456,
-            "lines": ["27"],
-            "icon": "mdi:fountain",
-        }
-    }
-    assert await async_setup_component(hass, "sensor", config)
-    await hass.async_block_till_done()
-    assert "Bus stop disabled or does not exist" in caplog.text
+    @patch(
+        "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    def test_authenticate_failure(self, mock_request) -> None:
+        """Test failed authentication."""
+        from custom_components.emt_madrid.emt_madrid import APIEMT
 
+        api = APIEMT("invalid@email.com", "password123", 0)
+        api.authenticate()
 
-@patch(
-    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-def test_get_stops_from_coordinates(setup_component) -> None:
-    """Test the get_stops_from_coordinates method."""
-    from custom_components.emt_madrid.emt_madrid import APIEMT
+        assert api._token == "Invalid token"
 
-    api = APIEMT("test@mail.com", "password123", 0)
-    api.authenticate()
+    @patch(
+        "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    def test_get_stops_from_coordinates(self, mock_request) -> None:
+        """Test getting stops from coordinates."""
+        from custom_components.emt_madrid.emt_madrid import APIEMT
 
-    stops = api.get_stops_from_coordinates(-3.7038, 40.4168, 300)
+        api = APIEMT("test@mail.com", "password123", 0)
+        api.authenticate()
 
-    assert len(stops) == 2
-    assert stops[0]["stop_id"] == "72"
-    assert stops[0]["stop_name"] == "Cibeles-Casa de América"
-    assert stops[0]["distance"] == 150
-    assert "27" in stops[0]["lines"]
-    assert stops[1]["stop_id"] == "73"
-    assert stops[1]["stop_name"] == "Recoletos"
+        stops = api.get_stops_from_coordinates(-3.7038, 40.4168, 300)
 
+        assert len(stops) == 2
+        assert stops[0]["stop_id"] == "72"
+        assert stops[0]["stop_name"] == "Cibeles-Casa de América"
+        assert stops[0]["distance"] == 150
+        assert "27" in stops[0]["lines"]
 
-@patch(
-    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-def test_get_nearby_arrivals(setup_component) -> None:
-    """Test the get_nearby_arrivals method."""
-    from custom_components.emt_madrid.emt_madrid import APIEMT
+    @patch(
+        "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    def test_get_nearby_arrivals(self, mock_request) -> None:
+        """Test getting nearby arrivals."""
+        from custom_components.emt_madrid.emt_madrid import APIEMT
 
-    api = APIEMT("test@mail.com", "password123", 0)
-    api.authenticate()
+        api = APIEMT("test@mail.com", "password123", 0)
+        api.authenticate()
 
-    arrivals = api.get_nearby_arrivals(-3.7038, 40.4168, 300, 10)
+        arrivals = api.get_nearby_arrivals(-3.7038, 40.4168, 300, 10)
 
-    assert len(arrivals) > 0
-    # Arrivals should be sorted by minutes
-    for i in range(len(arrivals) - 1):
-        assert arrivals[i]["minutes"] <= arrivals[i + 1]["minutes"]
-    # Check arrival structure
-    assert "line" in arrivals[0]
-    assert "minutes" in arrivals[0]
-    assert "stop_name" in arrivals[0]
+        assert len(arrivals) > 0
+        # Arrivals should be sorted by minutes
+        for i in range(len(arrivals) - 1):
+            assert arrivals[i]["minutes"] <= arrivals[i + 1]["minutes"]
+        # Check arrival structure
+        assert "line" in arrivals[0]
+        assert "minutes" in arrivals[0]
+        assert "stop_name" in arrivals[0]
+
+    @patch(
+        "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
+        side_effect=make_request_mock,
+    )
+    def test_get_nearby_arrivals_invalid_token(self, mock_request) -> None:
+        """Test getting nearby arrivals with invalid token."""
+        from custom_components.emt_madrid.emt_madrid import APIEMT
+
+        api = APIEMT("invalid@email.com", "password123", 0)
+        api.authenticate()
+
+        arrivals = api.get_nearby_arrivals(-3.7038, 40.4168, 300, 10)
+
+        assert arrivals == []
 
 
-@patch(
-    "custom_components.emt_madrid.emt_madrid.APIEMT._make_request",
-    side_effect=make_request_mock,
-)
-def test_format_arrivals_for_speech(setup_component) -> None:
+class TestSpeechFormatting:
     """Test the speech formatting function."""
-    from custom_components.emt_madrid import _format_arrivals_for_speech
 
-    # Test empty arrivals
-    assert _format_arrivals_for_speech([]) == "No hay autobuses llegando a paradas cercanas en este momento."
+    def test_format_empty_arrivals(self) -> None:
+        """Test formatting empty arrivals."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
 
-    # Test single arrival
-    arrivals = [{"line": "27", "minutes": 3}]
-    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos."
+        result = _format_arrivals_for_speech([])
+        assert result == "No hay autobuses llegando a paradas cercanas en este momento."
 
-    # Test arrival now
-    arrivals = [{"line": "27", "minutes": 0}]
-    assert _format_arrivals_for_speech(arrivals) == "Línea 27 llegando ahora."
+    def test_format_single_arrival(self) -> None:
+        """Test formatting single arrival."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
 
-    # Test 1 minute
-    arrivals = [{"line": "27", "minutes": 1}]
-    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 1 minuto."
+        arrivals = [{"line": "27", "minutes": 3}]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 en 3 minutos."
 
-    # Test two arrivals
-    arrivals = [{"line": "27", "minutes": 3}, {"line": "5", "minutes": 7}]
-    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos y Línea 5 en 7 minutos."
+    def test_format_arrival_now(self) -> None:
+        """Test formatting arrival arriving now."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
 
-    # Test multiple arrivals
-    arrivals = [
-        {"line": "27", "minutes": 3},
-        {"line": "5", "minutes": 7},
-        {"line": "14", "minutes": 12}
-    ]
-    assert _format_arrivals_for_speech(arrivals) == "Línea 27 en 3 minutos, Línea 5 en 7 minutos, y Línea 14 en 12 minutos."
+        arrivals = [{"line": "27", "minutes": 0}]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 llegando ahora."
+
+    def test_format_arrival_one_minute(self) -> None:
+        """Test formatting arrival in one minute."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
+
+        arrivals = [{"line": "27", "minutes": 1}]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 en 1 minuto."
+
+    def test_format_two_arrivals(self) -> None:
+        """Test formatting two arrivals."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
+
+        arrivals = [{"line": "27", "minutes": 3}, {"line": "5", "minutes": 7}]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 en 3 minutos y Línea 5 en 7 minutos."
+
+    def test_format_multiple_arrivals(self) -> None:
+        """Test formatting multiple arrivals."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
+
+        arrivals = [
+            {"line": "27", "minutes": 3},
+            {"line": "5", "minutes": 7},
+            {"line": "14", "minutes": 12}
+        ]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 en 3 minutos, Línea 5 en 7 minutos, y Línea 14 en 12 minutos."
+
+    def test_format_duplicate_lines(self) -> None:
+        """Test that duplicate lines are not repeated."""
+        from custom_components.emt_madrid import _format_arrivals_for_speech
+
+        arrivals = [
+            {"line": "27", "minutes": 3},
+            {"line": "27", "minutes": 10},  # Same line, should be ignored
+            {"line": "5", "minutes": 7}
+        ]
+        result = _format_arrivals_for_speech(arrivals)
+        assert result == "Línea 27 en 3 minutos y Línea 5 en 7 minutos."
