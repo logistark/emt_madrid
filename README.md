@@ -1,191 +1,85 @@
 _Please :star: this repo if you find it useful_
 
-# EMT Madrid bus platform for Home Assistant
+# EMT Madrid for Home Assistant
 
-This is a custom sensor for Home Assistant that allows you to have the waiting time for a specific Madrid-EMT bus stop. Each sensor will provide the arrival time for the next 2 buses of the line specified in the configuration.
+Custom integration for Home Assistant that provides real-time bus arrival information from EMT Madrid (Empresa Municipal de Transportes). Automatically finds nearby bus stops based on your location.
 
 Thanks to [EMT Madrid MobilityLabs](https://mobilitylabs.emtmadrid.es/) for providing the data and [documentation](https://apidocs.emtmadrid.es/).
 
-![Example](example.png)
-![Example attributes](example_attributes.png)
+## Features
+
+- **Dynamic stop detection** - Automatically finds bus stops near your configured location
+- **Config Flow UI** - Easy setup through Home Assistant UI (no YAML needed)
+- **Voice assistant ready** - Built-in speech text for Alexa integration
+- **Custom coordinates** - Use home location or specify custom coordinates
+- **Additional stops** - Optionally monitor specific stop IDs
 
 ## Prerequisites
 
-To use the EMT Mobilitylabs API you need to register in their [website](https://mobilitylabs.emtmadrid.es/). You have to provide a valid email account and a password that will be used to configure the sensor. Once you are registered you will receive a confirmation email to activate your account. It will not work until you have completed all the steps.
+Register at [EMT MobilityLabs](https://mobilitylabs.emtmadrid.es/) to get your API credentials. You'll receive a confirmation email to activate your account.
 
 ## Installation
 
-### HACS installation
+### HACS (Recommended)
 
-1. Open Home Assistant and go to HACS (Home Assistant Community Store).
-2. In HACS, go to the "Integrations" tab and click on the three dots in the top right corner.
-3. Select "Custom repositories" and enter the repository URL: `https://github.com/fermartv/emt_madrid`.
-4. Select the category as "Integration" and click "Add."
-5. Once the repository is added, search for "EMT-Madrid bus" in HACS and click "Install."
-6. Restart Home Assistant.
+1. Open HACS in Home Assistant
+2. Go to "Integrations" → Three dots menu → "Custom repositories"
+3. Add `https://github.com/logistark/emt_madrid` as Integration
+4. Search for "EMT Madrid" and install
+5. Restart Home Assistant
 
+### Manual
 
-### Manual installation
+1. Copy the `custom_components/emt_madrid` folder to your Home Assistant `config/custom_components/` directory
+2. Restart Home Assistant
 
-1. Using the tool of choice open the directory for your HA configuration (where you find `configuration.yaml`).
-2. If you do not have a `custom_components` directory there, you need to create it.
-3. In the `custom_components` directory create a new directory called `emt_madrid`.
-4. Download _all_ the files from the `custom_components/emt_madrid/` directory in this repository.
-5. Place the files you downloaded in the new directory you created.
-6. Restart Home Assistant
+## Configuration
 
-## Add sensor to Home Assistant
+1. Go to **Settings** → **Devices & Services** → **Add Integration**
+2. Search for **"EMT Madrid"**
+3. Enter your credentials and options:
 
-Add `emt_madrid` sensor to your `configuration.yaml` file:
+| Option | Required | Default | Description |
+|--------|----------|---------|-------------|
+| Email | Yes | - | EMT MobilityLabs email |
+| Password | Yes | - | EMT MobilityLabs password |
+| Radius | No | 300 | Search radius in meters (50-1000) |
+| Latitude | No | zone.home | Custom latitude coordinate |
+| Longitude | No | zone.home | Custom longitude coordinate |
+| Stop IDs | No | - | Additional stop IDs (comma-separated) |
 
-   ```yaml
-   # Example configuration.yaml entry
-   sensor:
-     - platform: emt_madrid
-       email: !secret EMT_EMAIL
-       password: !secret EMT_PASSWORD
-       stop: 72
-       lines: 
-         - "27"
-         - "N26"
-       icon: "mdi:fountain"
-   ```
+## Sensor
 
-### Configuration Variables
+The integration creates a sensor `sensor.emt_nearby_buses` that shows:
 
-**email**:\
- _(string) (Required)_\
- Email account used to register in the EMT Madrid API.
-
-**password**:\
- _(string) (Required)_\
- Password used to register in the EMT Madrid API.
-
-**stop**:\
- _(integer) (Required)_\
- Bus stop ID.
-
-**lines**:\
- _(list) (Optional)_\
- One or more line numbers.
-
-**icon**:\
- _(string) (Optional)_\
- Icon to use in the frontend.
-_Default value: "mdi:bus"_
-
-
-## Sensors, status and attributes
-
-Once you have the platform up and running, you will have one sensor per line specified. If no lines are provided, it will create a sensor for each line at that stop ID. The name of the sensor will be automatically generated using the following structure: Bus {line} - {stop_name}. All the sensors will update the data automatically every minute, and you should have the following data:
-
-**state**:\
- _(int)_\
- Arrival time in minutes for the next bus. It will show "unknown" when there are no more buses coming and 45 when the arrival time is over 45 minutes.
+**State:** Next bus arrival (e.g., "27 en 3 min")
 
 ### Attributes
 
-**next_bus**:\
- _(int)_\
- Arrival time in minutes for the second bus. It will show "unknown" when there are no more buses coming and 45 when the arrival time is over 45 minutes.
+| Attribute | Description |
+|-----------|-------------|
+| `arrivals` | List of upcoming bus arrivals |
+| `stops_count` | Number of stops being monitored |
+| `speech` | Voice-ready text in Spanish |
+| `radius` | Configured search radius |
+| `latitude` | Current latitude |
+| `longitude` | Current longitude |
+| `extra_stops` | Additional configured stop IDs |
 
-**stop_id**:\
- _(int)_\
- Bus stop ID given in the configuration.
+## Service
 
-**stop_name**:\
- _(string)_\
- Bus stop name from EMT.
+### `emt_madrid.get_nearby_arrivals`
 
-**stop_address**:\
- _(string)_\
- Bus stop address from EMT.
+Get bus arrivals for any location.
 
-**line**:\
- _(string)_\
- Bus line.
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `latitude` | zone.home | Latitude coordinate |
+| `longitude` | zone.home | Longitude coordinate |
+| `radius` | 300 | Search radius (50-1000m) |
+| `max_results` | 5 | Max arrivals (1-20) |
 
-**destination**:\
- _(string)_\
- Bus line last stop.
-
-**origin**:\
- _(string)_\
- Bus line first stop.
-
-**start_time**:\
- _(string)_\
- Time at which the first bus leaves the first stop.
-
-**end_time**:\
- _(string)_\
- Time at which the last bus leaves the first stop.
-
-**max_frequency**:\
- _(int)_\
- Maximum frequency for this line.
-
-**min_frequency**:\
- _(int)_\
- Minimum frequency for this line.
-
-**distance**:\
- _(int)_\
- Distance (in metres) from the next bus to the stop.
-
-
-### Multiple stops
-
-If you want to follow multiple stops, you can create multiple sensors by adding the following lines to your `configuration.yaml`:
-
-   ```yaml
-   # Example configuration.yaml entry
-   sensor:
-     - platform: emt_madrid
-       email: !secret EMT_EMAIL
-       password: !secret EMT_PASSWORD
-       stop: 72
-       lines: 
-         - "27"
-         - "N26"
-       icon: "mdi:fountain"
-
-     - platform: emt_madrid
-       email: !secret EMT_EMAIL
-       password: !secret EMT_PASSWORD
-       stop: 4490
-       icon: "mdi:bus-clock"
-   ```
-
-
-### Second bus sensor
-
-If you want to have a specific sensor to show the arrival time for the second bus, you can add the following lines to your `configuration.yaml` file below the `emt_madrid` bus sensor. See the official Home Assistant [template sensor](https://www.home-assistant.io/integrations/template/) for more information.
-
-```yaml
-# Example configuration.yaml entry
-template:
-  - sensor:
-      - name: "Siguiente bus 27"
-        unit_of_measurement: "min"
-        state: "{{ state_attr('sensor.bus_27_cibeles_casa_de_america', 'next_bus') }}"
-```
-
-## Nearby Bus Arrivals Service
-
-This integration provides a service `emt_madrid.get_nearby_arrivals` that finds bus stops near your home and returns arrival times. This is useful for voice assistants like Alexa.
-
-### Service Parameters
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `latitude` | float | zone.home | Latitude coordinate |
-| `longitude` | float | zone.home | Longitude coordinate |
-| `radius` | int | 300 | Search radius in meters (50-1000) |
-| `max_results` | int | 5 | Maximum arrivals to return (1-20) |
-
-### Service Response
-
+**Response:**
 ```yaml
 arrivals:
   - line: "27"
@@ -196,11 +90,11 @@ speech: "Línea 27 en 3 minutos, Línea 5 en 7 minutos."
 count: 2
 ```
 
-### Alexa Voice Integration
+## Alexa Integration
 
-You can ask Alexa "when is the next bus" using this setup:
+Ask Alexa when the next bus arrives:
 
-1. **Add to `configuration.yaml`:**
+### 1. Add to `configuration.yaml`:
 
 ```yaml
 input_boolean:
@@ -233,16 +127,11 @@ automation:
           entity_id: input_boolean.emt_nearby_buses_trigger
 ```
 
-2. **Create Alexa Routine:**
-   - Open Alexa app → More → Routines
-   - Trigger: Voice → "buses cercanos" (or your preferred phrase)
-   - Action: Smart Home → Control Device → `EMT Buses Trigger` → Turn On
+### 2. Create Alexa Routine:
+- Open Alexa app → More → Routines
+- Trigger: Voice → "buses cercanos"
+- Action: Smart Home → Control Device → `EMT Buses Trigger` → Turn On
 
-3. **Say:** "Alexa, buses cercanos"
+### 3. Say: "Alexa, buses cercanos"
 
-**Requirements:** [Alexa Media Player](https://github.com/alandtse/alexa_media_player) custom component and Nabu Casa (or Alexa Smart Home skill configured).
-
-## Roadmap
-
-1. Move to fully async component.
-2. Add `unique_id` to allow modifying sensor names.
+**Requirements:** [Alexa Media Player](https://github.com/alandtse/alexa_media_player) and Nabu Casa (or Alexa Smart Home skill).
