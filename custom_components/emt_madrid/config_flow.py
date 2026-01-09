@@ -7,9 +7,9 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigFlow, ConfigFlowResult, OptionsFlow, ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, CONF_RADIUS, CONF_LATITUDE, CONF_LONGITUDE
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 
 from .emt_madrid import APIEMT
@@ -58,6 +58,12 @@ class EMTMadridConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for EMT Madrid."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Get the options flow for this handler."""
+        return EMTMadridOptionsFlow(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -112,6 +118,78 @@ class EMTMadridConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=STEP_USER_DATA_SCHEMA,
+            errors=errors,
+        )
+
+
+class EMTMadridOptionsFlow(OptionsFlow):
+    """Handle options flow for EMT Madrid."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Initialize options flow."""
+        self.config_entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            # Parse stops from comma-separated string
+            stops_str = user_input.get(CONF_STOPS, "")
+            stops = []
+            if stops_str:
+                for s in stops_str.split(","):
+                    s = s.strip()
+                    if s:
+                        try:
+                            stops.append(int(s))
+                        except ValueError:
+                            errors["base"] = "invalid_stops"
+                            break
+
+            if not errors:
+                # Build new data, keeping email/password from original config
+                new_data = {
+                    CONF_EMAIL: self.config_entry.data[CONF_EMAIL],
+                    CONF_PASSWORD: self.config_entry.data[CONF_PASSWORD],
+                    CONF_RADIUS: user_input.get(CONF_RADIUS, 300),
+                    CONF_STOPS: stops,
+                }
+
+                # Add custom coordinates if provided
+                if user_input.get(CONF_LATITUDE) is not None:
+                    new_data[CONF_LATITUDE] = user_input[CONF_LATITUDE]
+                if user_input.get(CONF_LONGITUDE) is not None:
+                    new_data[CONF_LONGITUDE] = user_input[CONF_LONGITUDE]
+
+                self.hass.config_entries.async_update_entry(
+                    self.config_entry, data=new_data
+                )
+                return self.async_create_entry(title="", data={})
+
+        # Get current values for defaults
+        current_radius = self.config_entry.data.get(CONF_RADIUS, 300)
+        current_lat = self.config_entry.data.get(CONF_LATITUDE)
+        current_lon = self.config_entry.data.get(CONF_LONGITUDE)
+        current_stops = self.config_entry.data.get(CONF_STOPS, [])
+        stops_str = ", ".join(str(s) for s in current_stops) if current_stops else ""
+
+        options_schema = vol.Schema(
+            {
+                vol.Optional(CONF_RADIUS, default=current_radius): vol.All(
+                    vol.Coerce(int), vol.Range(min=50, max=1000)
+                ),
+                vol.Optional(CONF_LATITUDE, default=current_lat): vol.Any(None, vol.Coerce(float)),
+                vol.Optional(CONF_LONGITUDE, default=current_lon): vol.Any(None, vol.Coerce(float)),
+                vol.Optional(CONF_STOPS, default=stops_str): str,
+            }
+        )
+
+        return self.async_show_form(
+            step_id="init",
+            data_schema=options_schema,
             errors=errors,
         )
 

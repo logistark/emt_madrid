@@ -29,5 +29,27 @@
     "abort": {
       "already_configured": "EMT Madrid ya está configurado"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones de EMT Madrid",
+        "data": {
+          "radius": "Radio de búsqueda (metros)",
+          "latitude": "Latitud (opcional)",
+          "longitude": "Longitud (opcional)",
+          "stops": "IDs de paradas adicionales (opcional)"
+        },
+        "data_description": {
+          "radius": "Distancia máxima para buscar paradas (50-1000 metros)",
+          "latitude": "Latitud personalizada. Dejar vacío para usar ubicación de casa",
+          "longitude": "Longitud personalizada. Dejar vacío para usar ubicación de casa",
+          "stops": "Lista de IDs de paradas separadas por comas, ej.: 72, 4490"
+        }
+      }
+    },
+    "error": {
+      "invalid_stops": "IDs de paradas inválidos. Usa números separados por comas"
+    }
   }
 }

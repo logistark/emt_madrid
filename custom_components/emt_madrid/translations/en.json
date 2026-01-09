@@ -29,5 +29,27 @@
     "abort": {
       "already_configured": "EMT Madrid is already configured"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "EMT Madrid Options",
+        "data": {
+          "radius": "Search radius (meters)",
+          "latitude": "Latitude (optional)",
+          "longitude": "Longitude (optional)",
+          "stops": "Additional stop IDs (optional)"
+        },
+        "data_description": {
+          "radius": "How far to search for bus stops (50-1000 meters)",
+          "latitude": "Custom latitude. Leave empty to use home location",
+          "longitude": "Custom longitude. Leave empty to use home location",
+          "stops": "Comma-separated list of specific stop IDs, e.g.: 72, 4490"
+        }
+      }
+    },
+    "error": {
+      "invalid_stops": "Invalid stop IDs. Use comma-separated numbers"
+    }
   }
 }

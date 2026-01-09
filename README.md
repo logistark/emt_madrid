@@ -39,6 +39,15 @@ Register at [EMT MobilityLabs](https://mobilitylabs.emtmadrid.es/) to get your A
 2. Search for **"EMT Madrid"**
 3. Enter your credentials and options:
 
+### Edit Configuration
+
+To change settings after setup:
+1. Go to **Settings** → **Devices & Services**
+2. Find **EMT Madrid** → Click **Configure**
+3. Modify radius, coordinates, or stop IDs
+
+### Options
+
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
 | Email | Yes | - | EMT MobilityLabs email |
