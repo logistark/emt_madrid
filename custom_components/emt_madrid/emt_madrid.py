@@ -236,6 +236,7 @@ class APIEMT:
 
         try:
             response = self._make_request(url, headers=headers, method="GET")
+            _LOGGER.debug(f"Nearby stops API response: {response}")
             return self._parse_nearby_stops(response)
         except Exception as e:
             _LOGGER.error(f"Error getting stops from coordinates: {e}")
@@ -248,17 +249,29 @@ class APIEMT:
             response_code = response.get("code")
             if response_code in ["00", "01"]:
                 for stop_data in response.get("data", []):
-                    stop_id = stop_data.get("stop") or stop_data.get("stopId")
+                    # Try multiple possible field names for stop ID
+                    stop_id = (
+                        stop_data.get("stop") or
+                        stop_data.get("stopId") or
+                        stop_data.get("node") or
+                        stop_data.get("id")
+                    )
+
+                    # Skip stops without a valid ID
+                    if not stop_id:
+                        _LOGGER.debug(f"Skipping stop without ID: {stop_data}")
+                        continue
+
                     stops.append({
                         "stop_id": stop_id,
-                        "stop_name": stop_data.get("stopName") or stop_data.get("name"),
-                        "distance": stop_data.get("distance"),
+                        "stop_name": stop_data.get("stopName") or stop_data.get("name") or stop_data.get("label"),
+                        "distance": stop_data.get("distance") or stop_data.get("meters"),
                         "lines": [line.get("label") for line in stop_data.get("lines", [])]
                     })
             elif response_code == "80":
                 _LOGGER.warning("Invalid token when fetching nearby stops")
             elif response_code == "90":
-                _LOGGER.warning("No stops found near coordinates")
+                _LOGGER.debug("No stops found near coordinates")
         except (KeyError, TypeError) as e:
             _LOGGER.error(f"Error parsing nearby stops: {e}")
         return stops
